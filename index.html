@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAHUL-PW | THE OMNI-MACHINE V8.4</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg-dark: #09090b; --bg-card: #18181b; --accent: #3b82f6; --text-main: #fafafa; --text-dim: #a1a1aa; --border: #27272a; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); }
+
+        header {
+            height: auto; min-height: 70px; display: flex; align-items: center; justify-content: space-between; padding: 10px 40px;
+            background: rgba(9, 9, 11, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 1000; flex-wrap: wrap; gap: 15px;
+        }
+        .brand { font-size: 24px; font-weight: 800; letter-spacing: -1px; }
+        .brand span { color: var(--accent); }
+        .status { font-size: 11px; color: #22c55e; cursor:pointer; font-weight:700; white-space: nowrap; }
+        .search-container { flex-grow: 1; min-width: 200px; }
+        #search-bar { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: #27272a; color: white; }
+
+        main { padding: 30px 40px; max-width: 1400px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; transition: all 0.3s; cursor: pointer; position: relative; }
+        .card:hover { transform: translateY(-4px); border-color: var(--accent); }
+        .card-img-wrap { width: 100%; height: 180px; background: #27272a; }
+        .card-img { width: 100%; height: 100%; object-fit: contain; background: var(--bg-card); }
+        .card-content { padding: 16px; }
+        .card-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; height: 45px; overflow: hidden; }
+        
+        .fav-btn { cursor: pointer; float: right; color: var(--text-dim); font-size: 20px; }
+        .fav-btn.active { color: #f59e0b; }
+        .action-btn { width: 100%; padding: 12px; background: var(--accent); color: white; text-align: center; border-radius: 10px; font-weight: 700; font-size: 14px; margin-top: 10px; }
+
+        .pagination { display: flex; justify-content: center; gap: 20px; padding: 40px; }
+        .page-btn { padding: 12px 24px; background: #27272a; border-radius: 12px; cursor: pointer; font-weight: 700; border: 1px solid var(--border); }
+        .page-btn:hover:not(.disabled) { background: var(--accent); }
+        .page-btn.disabled { opacity: 0.3; cursor: not-allowed; }
+
+        @media (max-width: 768px) { 
+            header { padding: 15px 20px; justify-content: center; } 
+            .search-container { margin: 10px 0; order: 3; width: 100%; }
+            main { padding: 20px; } 
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand" onclick="loadBatches()">RAHUL<span>-PW</span></div>
+        <div class="search-container"><input type="text" id="search-bar" placeholder="Search..." oninput="handleSearch()"></div>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap: wrap; justify-content: center;">
+            <div class="status" onclick="setMode('all')">ALL</div>
+            <div class="status" onclick="setMode('fav')" style="color:#f59e0b;">MY BATCHES</div>
+            <div class="status" onclick="window.location.href='https://mj.streamfiles.eu.org/'" style="color:#10b981;">MISSIONJEET</div>
+            <div class="status" onclick="window.location.href='https://nt.streamfiles.eu.org/'" style="color:#a855f7;">NEXTTOPPERS</div>
+        </div>
+    </header>
+    <main id="grid" class="grid"></main>
+    <div class="pagination">
+        <div id="prev-btn" class="page-btn" onclick="changePage(-1)">PREV</div>
+        <div style="align-self:center" id="page-info">1</div>
+        <div id="next-btn" class="page-btn" onclick="changePage(1)">NEXT</div>
+    </div>
+
+    <script>
+        let allBatches = [];
+        let filteredBatches = [];
+        let currentPage = 1;
+        let mode = 'all';
+        const itemsPerPage = 15;
+        let favorites = JSON.parse(localStorage.getItem('favs') || '[]');
+
+        async function init() {
+            try {
+                const res = await fetch('batches.json');
+                const data = await res.json();
+                allBatches = data.batches;
+                setMode('all');
+            } catch (e) { console.error(e); }
+        }
+
+        function setMode(newMode) {
+            mode = newMode;
+            filteredBatches = mode === 'fav' ? allBatches.filter(b => favorites.includes(b._id || b.batch_id)) : allBatches;
+            currentPage = 1;
+            render();
+        }
+
+        function handleSearch() {
+            const q = document.getElementById('search-bar').value.toLowerCase();
+            const source = mode === 'fav' ? allBatches.filter(b => favorites.includes(b._id || b.batch_id)) : allBatches;
+            filteredBatches = source.filter(b => b.name.toLowerCase().includes(q));
+            currentPage = 1;
+            render();
+        }
+
+        function toggleFav(e, id) {
+            e.stopPropagation();
+            if (favorites.includes(id)) favorites = favorites.filter(f => f !== id);
+            else favorites.push(id);
+            localStorage.setItem('favs', JSON.stringify(favorites));
+            render();
+        }
+
+        function render() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            const start = (currentPage - 1) * itemsPerPage;
+            const pageItems = filteredBatches.slice(start, start + itemsPerPage);
+            
+            pageItems.forEach(b => {
+                const id = b._id || b.batch_id;
+                const isFav = favorites.includes(id);
+                let img = b.previewImage || b.photo || 'https://i.ibb.co/RTvsC93K/bannerimage-Rahul-maida.jpg';
+                if (img.includes('eduzex.is-great.org')) img = 'https://i.ibb.co/RTvsC93K/bannerimage-Rahul-maida.jpg';
+                const bName = encodeURIComponent(b.name).replace(/%20/g,'+');
+                
+                const el = document.createElement('div');
+                el.className = 'card';
+                el.onclick = () => window.location.href = `https://stream.testuk.org/subjects?batchId=${id}&batchName=${bName}`;
+                el.innerHTML = `
+                    <span class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFav(event, '${id}')">★</span>
+                    <div class="card-img-wrap"><img src="${img}" class="card-img" loading="lazy" onerror="this.src='https://i.ibb.co/RTvsC93K/bannerimage-Rahul-maida.jpg'"></div>
+                    <div class="card-content">
+                        <div class="card-title">${b.name}</div>
+                        <div class="action-btn">ENTER BATCH</div>
+                    </div>
+                `;
+                grid.appendChild(el);
+            });
+            document.getElementById('page-info').innerText = currentPage;
+        }
+
+        function changePage(dir) {
+            if (currentPage + dir > 0 && (currentPage + dir - 1) * itemsPerPage < filteredBatches.length) {
+                currentPage += dir;
+                render();
+            }
+        }
+        init();
+    </script>
+</body>
+</html>
